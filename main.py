@@ -7,35 +7,60 @@ import pandas as pd
 
 
 # ================= PART 1 : GET DATA OF EXCEL ===================
-csv_path = "data/test_data2.csv"
+csv_path = "data/new_data_of_khaosat_hieubietkinhte_ydinhkhoinghiep.csv"
 df = pd.read_csv(csv_path)
-df = df.drop(columns=['Timestamp'])
 csv_data = df.to_dict(orient='records')
+print(csv_data[0].keys())
+print(len(csv_data[0].keys()))
 
 # ================= PART 2 : FILL DATA TO GOOGLE FORM ===================
 # Khởi tạo trình duyệt
 chromedriver_path = 'F:/Application_Installed/CODE/Python/chromedriver-win64/chromedriver-win64/chromedriver.exe'
 service = Service(executable_path=chromedriver_path)
 driver = webdriver.Chrome(service=service)
-url = "https://docs.google.com/forms/d/e/1FAIpQLSe4ja9qHPm0hLobDY1hXqEm05cK1cNkIqcbS8h5drt5ZD7T9g/viewform?usp=sf_link"
+url = "https://docs.google.com/forms/d/e/1FAIpQLSdlKpCMMLRj0tA7D45bN8bvTRYYbQzPgsmNNqA0o7AHPd0Aqw/viewform?usp=sf_link"
 driver.get(url)
-# --------------- CLICK SUBMIT and NEXT BUTTON -----------------
+# --------------- CLICK SUBMIT and NEXT BUTTON and submit other response -----------------
+
+
 def click_next_button(classNameButton):
     buttons = driver.find_elements(By.CLASS_NAME, classNameButton)
     for button in buttons:
         button_text = button.find_element(By.XPATH, './/span[1]').text
         if button_text in ['Next', 'Tiếp']:
             button.click()
-            # Thêm thời gian chờ cho đến khi một phần tử mới xuất hiện
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'l4V7wb')))
             break
+
+
 def click_submit_button(classNameButton):
     buttons = driver.find_elements(By.CLASS_NAME, classNameButton)
     for button in buttons:
         button_text = button.find_element(By.XPATH, './/span[1]').text
-        if button_text in ['submit', 'Gửi']:
+
+        if button_text.lower() in [item.lower() for item in ['Submit', 'Gửi']]:
             button.click()
             break
+
+
+def click_submit_another_response_button(classNameButton):
+    # Tìm tất cả các thẻ div với class 'c2gzEf'
+
+    divs = WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located((By.CLASS_NAME, classNameButton)))
+    print(len(divs), classNameButton)
+
+    for div in divs:
+        # Tìm thẻ a thứ hai trong thẻ div
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable(div)
+        )
+        try:
+            button_sub_again = div.find_element(By.XPATH, './/a[2]')
+
+            button_sub_again.click()
+            break  # Dừng lại sau khi nhấp vào thẻ <a> thứ hai đầu tiên
+        except Exception as e:
+            print(f"Lỗi khi nhấp vào thẻ <a> thứ hai: {e}")
+
 # --------------- GET DATA OF TEXT QUESTION IN FORM ----------------
 def get_all_ques_of_text(classNameQuest, classNameAnswer):
     # Tạo một list để lưu trữ dữ liệu
@@ -53,6 +78,8 @@ def get_all_ques_of_text(classNameQuest, classNameAnswer):
             form_data[question_text] = text_value
     return form_data
 # --------------- GET DATA OF RADIO QUESTION INFORM ---------------
+
+import unicodedata
 def get_all_ques_of_radio(classNameQuest, classNameRow, classNameColumn):
     # Tạo một list để lưu trữ dữ liệu
     form_data = {}
@@ -65,7 +92,7 @@ def get_all_ques_of_radio(classNameQuest, classNameRow, classNameColumn):
         try:
             # Lấy văn bản của câu hỏi là thẻ span đầu tiên
             question_text = question.find_element(By.XPATH, './/span[1]').text
-
+            question_text = unicodedata.normalize('NFC', question_text)
             # Tìm các row của câu hỏi, mỗi row là một câu hỏi nhỏ khác
             rows_question = question.find_elements(By.CLASS_NAME, classNameRow)
 
@@ -86,19 +113,31 @@ def get_all_ques_of_radio(classNameQuest, classNameRow, classNameColumn):
 
 
 # --------------- FILL RADIO QUESTION ---------------
+import difflib
+import re
 # Fill a record value from dataframe to a question of Radio in a section
 def fill_to_radio_question(ansRadio, QuesRadio): #ansRadio : the answer of question in question ; valuesRadio : the choices of question
-    for (ans_key, ans_value), (ques_key, ques_value) in zip(ansRadio.items(), QuesRadio.items()):
+    for ques_key, ques_value in QuesRadio.items():
+        # Tìm tên columns tương tự nhất trong ansRadio
+        close_matches = difflib.get_close_matches(ques_key, ansRadio.keys(), n=1, cutoff=0.5) # giống 70%
 
         #ques_value là một danh sách các radio buttons, ta sẽ tìm button đúng
-        for radio_button in ques_value:
-            # Nếu câu trả lời của ans_value khớp với lựa chọn của radio_button
-            if radio_button.get_attribute('data-value') == ans_value:
-                radio_button.click()  # Nhấn vào radio button đúng
-                print(f"Đã chọn {ans_value} cho câu hỏi {ques_key}")
-                break
-            # else:
-            #     print(f"Không tìm thấy câu trả lời phù hợp cho câu hỏi: {ques_key}: {radio_button.get_attribute('class')} : {ans_value}")
+        if close_matches: # Nếu tìm thấy match tương tự
+            # print(re.sub(r'\[.*?\]', '', ques_key), ':::::', ansRadio.keys())
+
+            for radio_button in ques_value:
+                # Nếu câu trả lời của ans_value khớp với lựa chọn của radio_button
+                ans_value = ansRadio[close_matches[0]]
+                WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable(radio_button)
+                )
+                if radio_button.get_attribute('data-value') == ans_value:
+                    radio_button.click()  # Nhấn vào radio button đúng
+                    print(f"Đã chọn {ans_value}")
+                    # print(f"Đã chọn {ans_value} cho câu hỏi {ques_key}")
+                    break
+                # else:
+                #     print(f"Không tìm thấy câu trả lời phù hợp cho câu hỏi: {ques_key}: {radio_button.get_attribute('class')} : {ans_value}")
     return 0
 
 # --------------- FILL TEXT QUESTION ---------------
@@ -109,36 +148,123 @@ def fill_to_text_question(ansText, QuesText):
         # Giả sử ques_value là một list các ô input văn bản
         for text_input in ques_value:
             # Điền giá trị ans_value vào ô input
+            # Đợi phần tử sẵn sàng trước khi clear
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable(text_input)
+            )
             text_input.clear()  # Xóa nội dung hiện tại nếu có
             text_input.send_keys(ans_value)  # Điền câu trả lời mới
-            print(f"Đã điền {ans_value} cho câu hỏi {ques_key}")
-# ================= PART 3 : MAIN RUN ===================
-# ----------------- Find the questions in the google form -----------
-click_next_button(classNameButton='l4V7wb')
+            print(f"Đã điền {ans_value}")
+            # print(f"Đã điền {ans_value} cho câu hỏi {ques_key}")
 
-form_data_radio = get_all_ques_of_radio(classNameQuest='Qr7Oae',
-                                        classNameRow='H2Gmcc',
-                                        classNameColumn='Od2TWd')
+# =============================== PART 3 : MAIN RUN ======================================
+# ----------------- Find the questions in the google form ----------
+# NOTE TỔNG 35 câu hỏi
+# ISSUE : CHƯA TỰ ĐỘNG ĐẾM ĐƯỢC CÓ BAO NHIÊU CÂU HỎI TRONG 1 TRANG hoặc tụ động điền câu hỏi tương ứng mà vẫn cần đếm
+# vì phải check bằng mắt, fit column dict của data với column dict của câu hỏi trong form khi tìm
+# SETUP CLASS NAME
+classNameButton_next = 'l4V7wb'
+classNameButton_submit = 'l4V7wb'
+classNameButton_subAgain = 'c2gzEf'
 
-form_data_text = get_all_ques_of_text(classNameQuest='Qr7Oae',
-                                      classNameAnswer='whsOnd')
+classNameQuest_radio = 'Qr7Oae'
+classNameRow_radio = 'H2Gmcc'
+classNameColumn_radio = 'Od2TWd'
 
-# In kết quả để kiểm tra
-# click_submit_button(classNameButton='l4V7wb')
-print(csv_data[0].keys())
-print(form_data_radio.keys())
-print(form_data_text.keys())
+classNameQuest_text = 'o3Dpx'
+classNameAnswer_text = 'whsOnd'
 
-# ----------------- Fill form -----------------------
-# ----------------- Splitting the Data ---------------
-# -----------------
-ansRadio = dict(list(csv_data[0].items())[:-1])
-QuesRadio = form_data_radio
-#
-fill_to_radio_question(ansRadio, QuesRadio)
-ansText = dict([list(csv_data[0].items())[-1]])
+
+# SETUP CLASS NAME
+# *********************** PAGE 1 of 4 ****************************
+# 1. GET TAGS OF WEB (không có radio)
+# click_next_button(classNameButton=classNameButton_next)
+# click_submit_button(classNameButton=classNameButton_submit)
+# click_submit_another_response_button(classNameButton=classNameButton_subAgain)
+
+form_data_text = get_all_ques_of_text(classNameQuest=classNameQuest_text,
+                                      classNameAnswer=classNameAnswer_text)
+# 2. FILL
+# Điền gmail (ô đầu tiên)
+ansText = dict([list(csv_data[0].items())[0]])  # Get data of email column
 QuesText = form_data_text
 fill_to_text_question(ansText, QuesText)
+# 3. Chuyển trang
+click_next_button(classNameButton=classNameButton_next)
+
+# *********************** PAGE 2 of 4 ****************************
+print('PAGE 2')
+# 1. GET TAGS OF WEB (không có text)
+form_data_radio = get_all_ques_of_radio(classNameQuest=classNameQuest_radio,
+                                        classNameRow=classNameRow_radio,
+                                        classNameColumn=classNameColumn_radio)
+
+# 2. FILL
+# Điền 6 ô tiếp theo (đều là radio)
+QuesRadio = form_data_radio
+# Bỏ nội dung trong [] vì không cần thiết
+# Tạo bản sao của từ điển để tránh thay đổi kích thước trong khi lặp
+new_QuesRadio = {}
+for key, value in QuesRadio.items():
+    # Chuẩn hóa văn bản
+    normalized_key = unicodedata.normalize('NFC', key)
+    # Xóa nội dung trong dấu ngoặc vuông bao gồm cả ký tự xuống dòng
+    cleaned_key = re.sub(r'\[.*?\]', '', key,  flags=re.DOTALL).strip()  # Thay đổi giá trị trong từ điển
+    # Gán giá trị đã làm sạch vào từ điển mới với key chuẩn hóa
+    new_QuesRadio[cleaned_key] = value
+# Gán lại từ điển mới vào QuesRadio
+QuesRadio = new_QuesRadio
+
+fill_to_radio_question(csv_data[0], QuesRadio)
+
+# 3. Chuyển trang
+click_next_button(classNameButton=classNameButton_next)
+# *********************** PAGE 3 of 4 ****************************
+print('PAGE 3')
+# 1. GET TAGS OF WEB (không có text)
+form_data_radio = get_all_ques_of_radio(classNameQuest=classNameQuest_radio,
+                                        classNameRow=classNameRow_radio,
+                                        classNameColumn=classNameColumn_radio)
+# 2. FILL
+# Điền 27 ô tiếp theo (đều là radio)
+QuesRadio = form_data_radio
+fill_to_radio_question(csv_data[0], QuesRadio)
+# 3. Chuyển trang
+click_next_button(classNameButton=classNameButton_next)
+# *********************** PAGE 4 of 4 ****************************
+print('PAGE 4')
+# 1. GET TAGS OF WEB (không có text)
+form_data_radio = get_all_ques_of_radio(classNameQuest=classNameQuest_radio,
+                                        classNameRow=classNameRow_radio,
+                                        classNameColumn=classNameColumn_radio)
+# 2. FILL
+# Điền 1 ô cuối cùng  (đều là radio) -> tổng 1 + 6 +27 +1 = 35 (OK)
+QuesRadio = form_data_radio
+fill_to_radio_question(csv_data[0], QuesRadio)
+# 3. Submit
+click_submit_button(classNameButton=classNameButton_submit)
+
+# *********************** PAGE 5 of 4 (PAGE  Submit other response) ****************************
+# 4. Submit other response
+click_submit_another_response_button(classNameButton=classNameButton_subAgain)
+
+
+# SETUP CLASS NAME
+# *********************** PAGE 1 of 4 ****************************
+# 1. GET TAGS OF WEB (không có radio)
+# click_next_button(classNameButton=classNameButton_next)
+# click_submit_button(classNameButton=classNameButton_submit)
+# click_submit_another_response_button(classNameButton=classNameButton_subAgain)
+
+form_data_text = get_all_ques_of_text(classNameQuest=classNameQuest_text,
+                                      classNameAnswer=classNameAnswer_text)
+# 2. FILL
+# Điền gmail (ô đầu tiên)
+ansText = dict([list(csv_data[0].items())[0]])  # Get data of email column
+QuesText = form_data_text
+fill_to_text_question(ansText, QuesText)
+# 3. Chuyển trang
+click_next_button(classNameButton=classNameButton_next)
 
 # Đóng trình duyệt khi hoàn tất
 driver.quit()

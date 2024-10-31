@@ -22,6 +22,10 @@ df = df.dropna(axis=1, how='all')
 df = df.drop(columns=['Dấu thời gian'])
 # Review columns which is empty
 print(type(df.isna().sum()))
+print(df.columns.shape)
+# ---------------------(Handling Outliers) ----------------
+
+# XỬ LÝ OUTLIERS
 
 # ---------------------(Data Augmentation)------------------
 new_data = {}
