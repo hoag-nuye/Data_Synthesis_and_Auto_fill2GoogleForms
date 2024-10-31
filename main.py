@@ -12,7 +12,6 @@ df = pd.read_csv(csv_path)
 df = df.drop(columns=['Timestamp'])
 csv_data = df.to_dict(orient='records')
 
-
 # ================= PART 2 : FILL DATA TO GOOGLE FORM ===================
 # Khởi tạo trình duyệt
 chromedriver_path = 'F:/Application_Installed/CODE/Python/chromedriver-win64/chromedriver-win64/chromedriver.exe'
@@ -114,6 +113,7 @@ def fill_to_text_question(ansText, QuesText):
             text_input.send_keys(ans_value)  # Điền câu trả lời mới
             print(f"Đã điền {ans_value} cho câu hỏi {ques_key}")
 # ================= PART 3 : MAIN RUN ===================
+# ----------------- Find the questions in the google form -----------
 click_next_button(classNameButton='l4V7wb')
 
 form_data_radio = get_all_ques_of_radio(classNameQuest='Qr7Oae',
@@ -129,9 +129,12 @@ print(csv_data[0].keys())
 print(form_data_radio.keys())
 print(form_data_text.keys())
 
-#Fill form
+# ----------------- Fill form -----------------------
+# ----------------- Splitting the Data ---------------
+# -----------------
 ansRadio = dict(list(csv_data[0].items())[:-1])
 QuesRadio = form_data_radio
+#
 fill_to_radio_question(ansRadio, QuesRadio)
 ansText = dict([list(csv_data[0].items())[-1]])
 QuesText = form_data_text
