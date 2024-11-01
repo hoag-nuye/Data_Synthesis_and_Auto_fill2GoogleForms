@@ -3,8 +3,11 @@
 
 import pandas as pd
 from faker import Faker
+import unidecode
+
 from collections import Counter
 import random
+
 
 df_path = 'data/khaosat_hieubietkinhte_ydinhkhoinghiep.csv'
 df = pd.read_csv(df_path)
@@ -34,76 +37,92 @@ new_data = {}
 # Tao gmail bang thu vien faker
 fake = Faker('vi_VN')
 
-# Tao ra list chu ten nam, nu, sau đó kiểm tra tên xem nó có nằm trong gmail không để xác định giới
-# tính cho gmail
-# Tạo số lượng lớn tên giả để phân tích
-male_names = [fake.first_name_male() for _ in range(1000)]
-female_names = [fake.first_name_female() for _ in range(1000)]
-
-# Lấy 50 từ phổ biến nhất
-male_keywords = Counter([name.lower() for name in male_names]).most_common(50)
-female_keywords = Counter([name.lower() for name in female_names]).most_common(50)
-
-# Lấy danh sách từ khóa chỉ chứa tên
-male_keywords = [item[0] for item in male_keywords]
-female_keywords = [item[0] for item in female_keywords]
-
-# Sử dụng từ khóa để dự đoán giới tính
-def predict_gender_from_gmail(gmail):
-    name_part = gmail.split('@')[0]  # Lấy phần trước dấu @ trong email
-    name_part = name_part.lower()  # Chuyển tên thành chữ thường để so sánh
-
-    # Kiểm tra xem tên chứa từ khóa nữ
-    for keyword in female_keywords:
-        if keyword in name_part:
-            return 'Nữ'
-
-    # Kiểm tra xem tên chứa từ khóa nam
-    for keyword in male_keywords:
-        if keyword in name_part:
-            return 'Nam'
-
-    # Nếu không dự đoán được, chọn ngẫu nhiên giới tính
-    return random.choice(['Nam', 'Nữ'])
+# # Nếu không dự đoán được, chọn ngẫu nhiên giới tính
+# return random.choice(['Nam', 'Nữ'])
 
 # 2 : CREATE N RECORD of '1. Giới tính của bạn:'
+# Tạo danh sách các tên miền với tỉ lệ `@gmail.com` chiếm 90%
+domains = ["@gmail.com"] * 90 + ["@hvnh.edu.vn"] *10 +["@icloud.com"]
+
+# Hàm để tạo tên không có dấu
+def remove_accents(text):
+    return unidecode.unidecode(text)
+def generate_realistic_email(gender):
+
+    first_name = fake.first_name_male().lower() if gender == 'male' \
+        else random.choice([fake.first_name_female().lower(), fake.first_name_male().lower()])
+    middle_name = fake.middle_name().lower() # if fake.random_int(0, 1) else ""  # Có thể có hoặc không có tên giữa
+    last_name = fake.last_name().lower()
+
+    # Xóa dấu và trả về tên
+    first_name = remove_accents(first_name).replace(" ", "")
+    middle_name = remove_accents(middle_name).replace(" ", "")
+    last_name = remove_accents(last_name).replace(" ", "")
+
+    # Ngẫu nhiên tạo ngày, tháng, và năm sinh trong khoảng 2002-2005
+    day = f"{random.randint(1, 28):02}"  # Ngày từ 01 đến 28
+    month = f"{random.randint(1, 12):02}"  # Tháng từ 01 đến 12
+    year = random.randint(2002, 2006)  # Năm sinh từ 2002 đến 2005
+    year = str(year)
+
+    email_formats = [
+        f"{first_name}{last_name}_{day}",
+        f"{first_name}{last_name}{day}",
+        f"{first_name[0]}{last_name[0]}{day}",
+        f"{first_name[0]}{last_name[0]}{day}{year[-2:]}",
+        f"{first_name}.{last_name}{year[-2:]}",
+        f"{first_name}{random.randint(1, 999)}",
+        f"{last_name}{first_name}{day}{month}{year}",
+        f"{last_name}{middle_name}{first_name}{day}{year[-2:]}",
+        f"{first_name}_{last_name}{day}{month}",
+        f"{first_name}{middle_name}{last_name}{random.randint(1, 999)}",
+        f"{first_name}{last_name}{middle_name}{day}{month}{year[-2:]}",
+    ]
+
+    email = random.choice(email_formats) + random.choice(domains)
+    return email
 
 new_emails = []
 new_genders = []
 existing_emails = df['Địa chỉ email'].values.tolist()
 
 # Tạo Gmail và dự đoán giới tính dựa trên tên
-N = 300
-for _ in range(N):
-    # tao gmail
-    new_email = fake.email()
-    # tao ra gmail den khi nao khong trung voi email cu thi thoi : RAT LAU :V
-    while new_email in existing_emails:
-        new_email = fake.email()
+N = 150
 
-    # Tao gio tinh
-    new_gender = predict_gender_from_gmail(new_email)
-
-    new_emails.append(new_email)
-    new_genders.append(new_gender)
-    existing_emails.append(new_email)
-
-#Them vao dictionary du lieu moi
 new_data['Địa chỉ email'] = new_emails
-new_data['1. Giới tính của bạn:'] = new_genders
 # 3 : CREATE N RECORD of rest columns with normalize
-for column_name, column_data in df.items():
+df_temp = df.drop(columns=['Địa chỉ email'])
+for column_name, column_data in df_temp.items():
     # Lấy tỷ lệ xuất hiện của từng giá trị unique trong cột
     value_proportion = column_data.value_counts(normalize=True)
-    # Tạo 600 giá trị mới dựa trên tỷ lệ của dữ liệu cũ
+    # Tạo 300 giá trị mới dựa trên tỷ lệ của dữ liệu cũ
     new_data[column_name] = random.choices(value_proportion.index, weights=value_proportion.values, k=N)
 
+# Tạo ra gmail
+for gender in new_data['1. Giới tính của bạn:']:
+    # tao gmail
+    gender = 'male' if gender == 'Nam' else 'Nữ'
+    new_email = generate_realistic_email(gender)
+    # tao ra gmail den khi nao khong trung voi email cu thi thoi : RAT LAU :V
+    while new_email in existing_emails:
+        new_email = generate_realistic_email(gender)
+
+
+    new_emails.append(new_email)
+    existing_emails.append(new_email)
+
+
+new_data['Địa chỉ email'] = new_emails
+
+# Thay đổi cột 'Bạn nhận phiếu khảo sát này từ ai?' có toàn giá trị là Minh Trang
+new_data['Bạn nhận phiếu khảo sát này từ ai?'] = ['Minh Trang'] * len(new_data['Bạn nhận phiếu khảo sát này từ ai?'])
 print('====================== COMPARE DATA ==================')
 for (colum_name), (new_data_key, _) in zip(df.columns, new_data.items()):
     print(f'{column_name.strip() == new_data_key.strip()} == {colum_name} -- {new_data_key}')
     # print(type(column_name), type(new_data_key))
     print(len(column_name), len(new_data_key))
 
+# print(new_data['Bạn nhận phiếu khảo sát này từ ai?'], len(new_data['Bạn nhận phiếu khảo sát này từ ai?']))
 # NOTE : TÊN CỦA DF COLUMN CÓ THỂ SẼ KHÁC KHI TẠO NHƯNG HIỂN THỊ VẪN THẾ
 
 # ============== LƯU FILE ===================
